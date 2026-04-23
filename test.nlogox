@@ -248,10 +248,23 @@ to go
       let check-allelomimesis random-float 1.0
       
 
-      
-      set destination-node one-of nodes
-      
       set destination-building one-of patches with [zone-type != "none" and zone-type != "residential"]
+
+      if check-allelomimesis <= allelomimetic [
+        let nearby-people other pedestrians in-radius 2
+        if any? nearby-people [
+          let person-to-copy one-of nearby-people
+          let copied-destination [destination-building] of person-to-copy
+
+          if is-patch? copied-destination  [
+            set destination-building copied-destination
+          ]
+
+          set route []
+        ]
+      ]
+
+      ; set destination-node one-of nodes
       
       let target-patch destination-building ; need to separate it into a variable since nodes don't know what a 'destination-building' is
       let closest-node-to-destination min-one-of nodes [distance target-patch]
@@ -259,6 +272,10 @@ to go
       let my-node min-one-of nodes [distance myself]
       let my-dest destination-node 
       
+
+      ; Decide if pedestrian wants to walk or go to a traffic stop
+      
+
       set route [nw:turtles-on-weighted-path-to closest-node-to-destination "road-length"] of my-node
       
       ifelse route != false [

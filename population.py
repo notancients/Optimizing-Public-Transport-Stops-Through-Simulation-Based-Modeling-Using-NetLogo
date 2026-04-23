@@ -62,7 +62,9 @@ def determine_speed(age):
   elif age <= 79: return WALKING_SPEED_KMH[79]
   else: return WALKING_SPEED_KMH[89]
 
-def calculate_netlogo_speed(age, min_x, max_x, min_y, max_y, world_size):
+def calculate_netlogo_speed(age, world_coords, world_size):
+  min_x, min_y, max_x, max_y = world_coords["min_x"], world_coords["min_y"], world_coords["max_x"], world_coords["max_y"]
+
   speed = determine_speed(age)
   m_s = speed*(1000/3600)
   map_width_meters = ox.distance.great_circle(min_y, min_x, min_y, max_x)
@@ -72,6 +74,17 @@ def calculate_netlogo_speed(age, min_x, max_x, min_y, max_y, world_size):
 
   return round(patches_per_tick, 5)
 
+def calculate_netlogo_distance(distance, world_coords, world_size):
+  min_x, min_y, max_x, max_y = world_coords["min_x"], world_coords["min_y"], world_coords["max_x"], world_coords["max_y"]
+
+  netlogo_distace = 0
+
+  map_width_meters = ox.distance.great_circle(min_y, min_x, min_y, max_x)
+  meters_per_patch = map_width_meters / world_size
+
+  netlogo_distance = distance / meters_per_patch
+
+  return netlogo_distance 
 
 def generate_population(total_population,age_distribution, 
                         wait_tol_min, wait_tol_max, dist_tol_min, dist_tol_max,
@@ -105,12 +118,12 @@ def generate_population(total_population,age_distribution,
   ]
 
   waiting = [random.randint(wait_tol_min, wait_tol_max) for _ in range(total_population)]
-  distance = [random.randint(dist_tol_min, dist_tol_max) for _ in range(total_population)]
+  distance = [calculate_netlogo_distance(random.randint(dist_tol_min, dist_tol_max), world_coords=world_coords, world_size=world_size) for _ in range(total_population)]
   unruliness = [round(random.uniform(unruliness_min, unruliness_max),2) for _ in range(total_population)]
   jaywalking = [round(random.uniform(jaywalking_min, jaywalking_max),2) for _ in range(total_population)]
   allelomimetic = [round(random.uniform(allelomimetic_min, allelomimetic_max),2) for _ in range(total_population)]
   transportation_preference = [round(random.uniform(transpo_pref_min, transpo_pref_max),2) for _ in range(total_population)]
-  speed = [calculate_netlogo_speed(age, min_x=world_coords["min_x"], min_y=world_coords["min_y"], max_x=world_coords["max_x"], max_y=world_coords["max_y"], world_size=world_size) for age in ages]
+  speed = [calculate_netlogo_speed(age, world_coords, world_size=world_size) for age in ages]
 
   population_df = pd.DataFrame({
       "age": ages,

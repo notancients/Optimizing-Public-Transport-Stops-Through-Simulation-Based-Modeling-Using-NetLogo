@@ -19,7 +19,7 @@ def generate_private_vehicles(private_vehicle_amount):
   vehicle_type = ["car", "truck", "motorcycle", "tricycle"]
 
   types = [random.sample(vehicle_type, 1) for _ in range(private_vehicle_amount)]
-
+  
   pass
 
 def generate_public_transport():
