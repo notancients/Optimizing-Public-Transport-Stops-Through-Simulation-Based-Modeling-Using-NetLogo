@@ -247,24 +247,14 @@ to go
       ; This is the condition for allelomimesis
       let check-allelomimesis random-float 1.0
       
-      ifelse check-allelomimesis <= allelomimetic
-        ;; if
-        [
-          let nearby-pedestrians other pedestrians in-radius 2
-          if any? nearby-pedestrians [
-          let person-to-copy one-of nearby-pedestrians
-          let copied-destination [destination-building] of person-to-copy
-          set destination-building copied-destination
-          set route[]
-        ]
-        ]
-        ;; else
-        [
-         set destination-building one-of patches with [zone-type != "none" and zone-type != "residential"]
-        ]
-   
+
       
-      let closest-node-to-destination min-one-of nodes [distance destination-building]
+      set destination-node one-of nodes
+      
+      set destination-building one-of patches with [zone-type != "none" and zone-type != "residential"]
+      
+      let target-patch destination-building ; need to separate it into a variable since nodes don't know what a 'destination-building' is
+      let closest-node-to-destination min-one-of nodes [distance target-patch]
       
       let my-node min-one-of nodes [distance myself]
       let my-dest destination-node 
