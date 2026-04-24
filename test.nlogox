@@ -2,6 +2,11 @@
 <model version="NetLogo 7.0.0" snapToGrid="true">
   <code><![CDATA[extensions [ csv nw ]
 
+; Interactivity
+globals [
+  draft-jeepney-route-nodes
+]
+
 ; Agents and road network
 breed [ nodes node ]
 nodes-own [ node-id ]
@@ -57,7 +62,10 @@ vehicles-own [
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
-to setup
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+; Load Map
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+to load-map
   clear-all
   
   ; Step 1:
@@ -156,25 +164,45 @@ to setup
   ]
 
 ; First layer (already in your code)
-ask patches with [is-street?] [
-  ask neighbors [
-    if not is-street? [
-      set is-sidewalk? true
-      ;set pcolor gray + 2
+  ask patches with [is-street?] [
+    ask neighbors [
+      if not is-street? [
+        set is-sidewalk? true
+        ;set pcolor gray + 2
+      ]
     ]
   ]
-]
 ; Second layer
-ask patches with [is-sidewalk?] [
-  ask neighbors [
-    if not is-street? and not is-sidewalk? [
-      set is-sidewalk? true
-      ;set pcolor gray + 2
+  ask patches with [is-sidewalk?] [
+    ask neighbors [
+      if not is-street? and not is-sidewalk? [
+        set is-sidewalk? true
+        ;set pcolor gray + 2
+      ]
     ]
   ]
-]
-  
-  ; 4. Spawn Pedestrians
+
+
+  reset-ticks
+
+  ; Spawn private vehicles
+    ;create-pedestrians 50 [
+  ;  move-to one-of nodes
+  ;  set shape "person"
+  ;  set color red
+  ;  set size 1.5
+  ;  set route []
+  ;]
+
+
+end
+
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+; Spawn entities
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
+to spawn-pedestrians 
+    ; 4. Spawn Pedestrians
 
   ;create-pedestrians 50 [
   ;  move-to one-of nodes
@@ -211,18 +239,9 @@ ask patches with [is-sidewalk?] [
       set color red
     ]
   ]
+end
 
-  reset-ticks
-
-  ; Spawn private vehicles
-    ;create-pedestrians 50 [
-  ;  move-to one-of nodes
-  ;  set shape "person"
-  ;  set color red
-  ;  set size 1.5
-  ;  set route []
-  ;]
-
+to spawn-vehicles 
   create-vehicles 100 [
     move-to one-of nodes
     set shape "car"
@@ -234,6 +253,14 @@ ask patches with [is-sidewalk?] [
 end
 
 
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+; Record routes
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
+
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+; Go
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 to go
 
   ; Pedestrian Logic
@@ -290,13 +317,19 @@ to go
         set route [] 
       ]
     ]
+
+    ; Passenger boarding and alighting
     
     ; 2. Walk
     if is-list? route and not empty? route [
       let next-node first route
       
       face next-node
-      fd speed
+
+      let vehicle-in-front other vehicles in-cone 1 45
+      if not any? vehicle-in-front [
+        fd speed
+      ]
       
       if distance next-node < speed [
         move-to next-node
@@ -350,8 +383,13 @@ to go
 end]]></code>
   <widgets>
     <view x="368" wrappingAllowedX="false" y="10" frameRate="30.0" minPycor="0" height="539" showTickCounter="true" patchSize="5.0" fontSize="10" wrappingAllowedY="false" width="539" tickCounterLabel="ticks" maxPycor="100" updateMode="1" maxPxcor="100" minPxcor="0"></view>
-    <button x="100" y="340" height="40" disableUntilTicks="false" forever="false" kind="Observer" width="55" display="setup">setup</button>
-    <button x="220" y="350" height="40" disableUntilTicks="false" forever="true" kind="Observer" width="55" display="go">go</button>
+    <button x="105" y="370" height="40" disableUntilTicks="false" forever="false" kind="Observer" width="76" display="Load Map">load-map</button>
+    <button x="195" y="370" height="40" disableUntilTicks="false" forever="true" kind="Observer" width="55" display="go">go</button>
+    <button x="260" y="370" height="40" disableUntilTicks="false" forever="false" kind="Observer" width="55" display="Reset">clear-all</button>
+    <button x="190" y="320" height="40" disableUntilTicks="false" forever="false" kind="Observer" width="125" display="Spawn Pedestrians">spawn-pedestrians</button>
+    <button x="75" y="320" height="40" disableUntilTicks="false" forever="false" kind="Observer" width="105" display="Spawn Vehicles">spawn-vehicles</button>
+    <button x="230" y="270" height="40" disableUntilTicks="false" forever="true" kind="Observer" width="101">record-click</button>
+    <button x="130" y="270" height="40" disableUntilTicks="false" forever="false" kind="Observer" width="90">export-route</button>
   </widgets>
   <info>## WHAT IS IT?
 
