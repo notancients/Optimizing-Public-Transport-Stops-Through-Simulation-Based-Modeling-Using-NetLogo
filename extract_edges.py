@@ -64,11 +64,11 @@ def fetch_roads(place_name, world_size):
     }
 
 
-SPECIAL = ["weather_station", "shrine", "civic", "chapel", "veterinary", "townhall", "prison", "place_of_worship", "laboratory", "fire_station", "police", "veterinary", "dentist", "doctors", "studio", "clinic", "childcare", "courthouse", "gravey_yard", "health_post", "hospital", ]
+SPECIAL = ["weather_station", "shrine", "civic", "chapel", "veterinary", "townhall", "prison", "place_of_worship", "laboratory", "fire_station", "police", "dentist", "doctors", "studio", "clinic", "childcare", "courthouse", "grave_yard", "health_post", "hospital", ]
 SCHOOL = ["university", "school", "research_institute", "prep_school", "library", "lecture_hall", "kindergarten", "college"]
-TRANSPORT = ["train_station", "pedicab_terminal", "taxi", "pedicab", "terminal", "bicycle_rental", "bus_station"]
-COMMERCIAL = ["supermarket", "retail", "office", "industrial", "garages", "garage", "commercial", "clubhouse", "theatre", "restaurant", "money_transfer", "marketplace", "karaoke_box", "internet_cafe", "ice_cream", "bar", "car_wash", "events_venue", "food_court", "fuel", "fast_food", "pharmacy", "bank", "parking", "atm", "telephone", "ice_cream" "pub", "cafe", "gambling", "bureau_de_change", ]
-MISCELLANEOUS = ["public", "greenhouse", "guardhouse", "farm_auxiliary", "waste_basket", "vending_machine", "telephone", "social_facility", "security_booth", "recycling", "post_office", "post_box", "parking_space", "parking", "motorcycle_tax", "motorcycle_parking", "hut", "community_centre", "conference_centre", "computer","toilets", "bench", "waste_basket", "fountain", "auditorium", "air_filling", "bicycle_parking"]
+TRANSPORT = ["train_station", "pedicab_terminal", "taxi", "pedicab", "terminal", "bicycle_rental", "bus_station", "air_filling", "bicycle_parking", "parking_space", "parking", "motorcycle_taxi", "motorcycle_parking",]
+COMMERCIAL = ["vending_machine","farm_auxiliary", "greenhouse", "warehouse","supermarket", "retail", "office", "industrial", "garages", "garage", "commercial", "clubhouse", "theatre", "restaurant", "money_transfer", "marketplace", "karaoke_box", "internet_cafe", "ice_cream", "bar", "car_wash", "events_venue", "food_court", "fuel", "fast_food", "pharmacy", "bank", "parking", "atm", "pub", "cafe", "gambling", "bureau_de_change", ]
+MISCELLANEOUS = ["public", "guardhouse",  "telephone", "social_facility", "security_booth", "recycling", "post_office", "post_box",  "hut", "community_centre", "conference_centre", "computer","toilets", "bench", "waste_basket", "telephone", "fountain", "auditorium"]
 RESIDENTIAL = ["residential", "house", "detached", "dormitory", "shelter", 'apartments']
 
 def build_category_map():
@@ -96,11 +96,11 @@ def categorize_building(row):
     building = str(row.get('building', '')).lower()
     landuse = str(row.get('landuse', '')).lower()
 
-    if row.get('house', '') != '' or row.get('residential', '') != '':
+    if pd.notna(row.get('house', '')) or pd.notna(row.get('residential', '')):
         return 'residential'
-    elif row.get('shop', '') != '':
+    elif pd.notna(row.get('shop', '')):
         return 'commercial'
-    elif row.get('education', '') != '' or row.get('place_of_worship', '') != '':
+    elif pd.notna(row.get('education', '')) or pd.notna(row.get('place_of_worship', '')):
         return 'special'
     
     fields = [amenity, building_use, building, landuse]
@@ -134,6 +134,14 @@ def categorize_building(row):
 #     else:
 #         return 'residential' # Default for unlabelled
 
+def give_building_names(row):
+    name = row.get('name')
+    if pd.notna(name):
+        return str(name)
+    else:
+        return 'Unnamed'
+    pass
+
 def fetch_nodes(place_name, min_x, max_x, min_y, max_y, world_size):
     # Step 2:
     # Fetch buildings and get their 'tags'
@@ -164,9 +172,11 @@ def fetch_nodes(place_name, min_x, max_x, min_y, max_y, world_size):
     print(buildings)
 
     buildings['category'] = buildings.apply(categorize_building, axis=1)
+    buildings['name'] = buildings.apply(give_building_names, axis=1)
 
+    buildings.to_csv('categorized_buildings.csv', index=True)
     # Extract only the data we need
-    buildings_df = buildings[['x', 'y', 'category']].copy()
+    buildings_df = buildings[['name', 'x', 'y', 'category']].copy()
 
 
     # Scale buildings to line up with the roads
@@ -174,7 +184,7 @@ def fetch_nodes(place_name, min_x, max_x, min_y, max_y, world_size):
     buildings_df['y_coord'] = ((buildings_df['y'] - min_y) / (max_y - min_y)) * world_size
 
     # Drop the unnecessary raw lat/long columns and save
-    buildings_df = buildings_df[['x_coord', 'y_coord', 'category']]
+    buildings_df = buildings_df[['name', 'x_coord', 'y_coord', 'category']]
     buildings_df.insert(0, "bldg_id", range(len(buildings_df)))
     buildings_df.to_csv('buildings.csv', index=False)
 
