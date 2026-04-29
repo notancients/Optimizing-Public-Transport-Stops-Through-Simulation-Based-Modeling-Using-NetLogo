@@ -1,9 +1,25 @@
+import csv
+
 import osmnx as ox
 import pandas as pd
 import warnings
 
 warnings.filterwarnings('ignore')
 
+
+SPEED_MAP = {
+    "primary": 50,
+    "secondary": 40,
+    "tertiary": 30,
+    "residential": 20,
+    "unclassified": 20,
+    "service": 10,
+    "track": 10,
+    "footway": 5,
+    "path": 5,
+    "cycleway": 15,
+    "steps": 2
+}
 
 
 # place_name = "Los Baños, Laguna, Philippines"
@@ -16,10 +32,19 @@ def fetch_roads(place_name, world_size):
     
     # 'all' fetches drivable roads AND pedestrian walkways/paths
     G = ox.graph_from_place(place_name, network_type='all', simplify=True)
+    G = ox.add_edge_speeds(G)
     nodes, edges = ox.graph_to_gdfs(G)
     edges.to_csv("raw_edges.csv", index=False)
     nodes.to_csv("raw_nodes.csv", index=False)
 
+    tags = {
+        "public_transport": True,
+        "highway": True
+    }
+    stops = ox.features_from_place(place_name, tags=tags)
+    stops = stops[stops[['public_transport', 'highway']].notna().any(axis=1)]
+    stops.to_csv('stops.csv', index=True)
+# gdf = gdf[gdf[['col1', 'col2', 'col3']].notna().any(axis=1)]
     # Step 3:
     # Apply proper formatting and scale it so that it works in the size of our NetLogo world
     print("Formatting nodes.")
@@ -37,13 +62,24 @@ def fetch_roads(place_name, world_size):
     nodes_df.to_csv('nodes.csv', index=False)
 
     # Step 4: 
-
-    edges_df = edges.reset_index()[['u', 'v', 'length', 'highway']]
-    edges_df.rename(columns={'u': 'source_node_id', 'v': 'target_node_id', 'length': 'road_length', 'highway': 'road_type'}, inplace=True)
+    edges_df = edges.reset_index()[['u', 'v', 'length', 'highway', 'name', 'oneway', 'speed_kph', 'access', 'lanes']]
+    edges_df.rename(columns={
+            'u': 'source_node_id', 
+            'v': 'target_node_id', 
+            'length': 'road_length',
+            'highway': 'road_type',
+            'speed_kph': 'max_speed',
+            'oneway': 'one-way',
+            }, 
+        inplace=True)
 
     # Clean up lists in road_type
     edges_df['road_type'] = edges_df['road_type'].apply(lambda x: x[0] if isinstance(x, list) else x)
-
+    edges_df['name'] = edges_df['name'].fillna("Unnamed")
+    edges_df['access'] = edges_df['access'].fillna("Uncategorized")
+    edges_df['max_speed'] = edges_df['max_speed'].apply(lambda x: round(x, 2))
+    
+    edges_df.to_csv("edges.csv", index=False)
     print("Saving map image.")
 
     # This plots the road network and saves it as a high-res JPEG
@@ -64,10 +100,10 @@ def fetch_roads(place_name, world_size):
     }
 
 
-SPECIAL = ["weather_station", "shrine", "civic", "chapel", "veterinary", "townhall", "prison", "place_of_worship", "laboratory", "fire_station", "police", "dentist", "doctors", "studio", "clinic", "childcare", "courthouse", "grave_yard", "health_post", "hospital", ]
-SCHOOL = ["university", "school", "research_institute", "prep_school", "library", "lecture_hall", "kindergarten", "college"]
+SPECIAL = ["utility", "research", "ngo", "government", "foundation", "weather_station", "shrine", "civic", "chapel", "veterinary", "townhall", "prison", "place_of_worship", "laboratory", "fire_station", "police", "dentist", "doctors", "studio", "clinic", "childcare", "courthouse", "grave_yard", "health_post", "hospital", ]
+SCHOOL = ["student_union", "educational_institution", "alumni_affairs", "university", "school", "research_institute", "prep_school", "library", "lecture_hall", "kindergarten", "college"]
 TRANSPORT = ["train_station", "pedicab_terminal", "taxi", "pedicab", "terminal", "bicycle_rental", "bus_station", "air_filling", "bicycle_parking", "parking_space", "parking", "motorcycle_taxi", "motorcycle_parking",]
-COMMERCIAL = ["vending_machine","farm_auxiliary", "greenhouse", "warehouse","supermarket", "retail", "office", "industrial", "garages", "garage", "commercial", "clubhouse", "theatre", "restaurant", "money_transfer", "marketplace", "karaoke_box", "internet_cafe", "ice_cream", "bar", "car_wash", "events_venue", "food_court", "fuel", "fast_food", "pharmacy", "bank", "parking", "atm", "pub", "cafe", "gambling", "bureau_de_change", ]
+COMMERCIAL = ["telecommunication", "travel_agent", "security", "newspaper", "it", "financial", "estate_agent", "courier", "company", "consulting", "cable_television", "administrative", "vending_machine","farm_auxiliary", "greenhouse", "warehouse","supermarket", "retail", "office", "industrial", "garages", "garage", "commercial", "clubhouse", "theatre", "restaurant", "money_transfer", "marketplace", "karaoke_box", "internet_cafe", "ice_cream", "bar", "car_wash", "events_venue", "food_court", "fuel", "fast_food", "pharmacy", "bank", "parking", "atm", "pub", "cafe", "gambling", "bureau_de_change", ]
 MISCELLANEOUS = ["public", "guardhouse",  "telephone", "social_facility", "security_booth", "recycling", "post_office", "post_box",  "hut", "community_centre", "conference_centre", "computer","toilets", "bench", "waste_basket", "telephone", "fountain", "auditorium"]
 RESIDENTIAL = ["residential", "house", "detached", "dormitory", "shelter", 'apartments']
 
@@ -89,12 +125,18 @@ def build_category_map():
 
 CATEGORY_MAP = build_category_map()
 
+with open('output.csv', 'w', newline='') as f:
+    writer = csv.writer(f)
+    writer.writerows(CATEGORY_MAP.items())
+
+
 def categorize_building(row):
     amenity = str(row.get('amenity', '')).lower()
     
     building_use = str(row.get('building:use', '')).lower()
     building = str(row.get('building', '')).lower()
     landuse = str(row.get('landuse', '')).lower()
+    office = str(row.get('office', '')).lower()
 
     if pd.notna(row.get('house', '')) or pd.notna(row.get('residential', '')):
         return 'residential'
@@ -103,7 +145,7 @@ def categorize_building(row):
     elif pd.notna(row.get('education', '')) or pd.notna(row.get('place_of_worship', '')):
         return 'special'
     
-    fields = [amenity, building_use, building, landuse]
+    fields = [office, amenity, building_use, building, landuse]
 
     for field in fields:
         if not field:
@@ -153,8 +195,6 @@ def fetch_nodes(place_name, min_x, max_x, min_y, max_y, world_size):
         "shop": True,
         "office": True,
         "landuse": True,
-        "public_transport": True,
-        "highway": True
     }
     buildings = ox.features_from_place(place_name, tags=tags)
 
@@ -174,7 +214,7 @@ def fetch_nodes(place_name, min_x, max_x, min_y, max_y, world_size):
     buildings['category'] = buildings.apply(categorize_building, axis=1)
     buildings['name'] = buildings.apply(give_building_names, axis=1)
 
-    buildings.to_csv('categorized_buildings.csv', index=True)
+    # buildings.to_csv('categorized_buildings.csv', index=True)
     # Extract only the data we need
     buildings_df = buildings[['name', 'x', 'y', 'category']].copy()
 

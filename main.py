@@ -8,7 +8,8 @@ PLACE_NAME = "Los Baños, Laguna, Philippines"
 def main():
   world_coords = fetch_roads(place_name=PLACE_NAME, world_size=WORLD_SIZE)
 
-  buildings = fetch_buildings(place_name=PLACE_NAME, world_size=WORLD_SIZE,
+  print("WORLD COORDS", world_coords)
+  buildings = fetch_nodes(place_name=PLACE_NAME, world_size=WORLD_SIZE,
                               min_x=world_coords["min_x"], max_x=world_coords["max_x"],
                               min_y=world_coords["min_y"], max_y=world_coords["max_y"]
                               )

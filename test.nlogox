@@ -1,10 +1,15 @@
 <?xml version="1.0" encoding="utf-8"?>
 <model version="NetLogo 7.0.0" snapToGrid="true">
-  <code><![CDATA[extensions [ csv nw ]
+  <code><![CDATA[extensions [ csv nw py]
 
 ; Interactivity
 globals [
-  draft-jeepney-route-nodes
+  draft-jeepney-route-nodes ; this will hold the list of nodes
+  jeepney-routes ; list of lists, each list will contain a set of nodes plus one final item at the end, denoting how many jeeps will spawn for that route
+  nodes-hidden
+  buildings-hidden
+  vehicles-hidden
+  pedestrians-hidden
 ]
 
 ; Agents and road network
@@ -12,11 +17,24 @@ breed [ nodes node ]
 nodes-own [ node-id ]
 
 
-undirected-link-breed [ roads road ]
+directed-link-breed [ roads road ]
 roads-own [ 
   road-length 
   road-type
+  lanes
+  max-speed
+  access
+  is-oneway?
+  road-name
 ]
+
+breed [ buildings building ] ;were converting buildings into turtles instead of patches to avoid overwrite
+buildings-own [
+  building-id
+  category
+  name
+]
+
 
 patches-own [ 
   zone-type       ;
@@ -42,6 +60,7 @@ pedestrians-own [
   unruliness
   jaywalking
   speed
+  ride-id
 ]
 
 breed [vehicles vehicle]
@@ -63,10 +82,48 @@ vehicles-own [
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+; Fetch roads
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
+to fetch-roads
+  ; py:setup "python3"
+  ; py:run "from population import generate_population"
+
+  ; py:run "generate_population"
+end
+
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+; Fetch buildings
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
+to fetch-buildings
+
+end
+
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+; Generate synthetic population
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
+to generate-population
+
+end
+
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ; Load Map
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 to load-map
   clear-all
+  
+  ;;;;;;;;;;;;;;;;;;;;;
+  ; Initialize globals
+  ;;;;;;;;;;;;;;;;;;;;;
+  set nodes-hidden false
+  set buildings-hidden false
+  set vehicles-hidden false
+  set pedestrians-hidden false
+  ;;;;;;;;;;;;;;;;;;;;;
+  ; 
+  ;;;;;;;;;;;;;;;;;;;;;  
   
   ; Step 1:
   ; Load intersection nodes
@@ -80,9 +137,9 @@ to load-map
       set ycor item 2 row
       
       set shape "circle"
-      set size 0.5
-      set color red
-      set hidden? false
+      set size 0.3
+      set color [255 0 0 128]
+      set hidden? nodes-hidden
     ]
   ]
 
@@ -96,18 +153,29 @@ to load-map
     let target-id item 1 row
     let r-length item 2 row
     let r-type item 3 row
+    let r-name item 4 row
+    let r-way item 5 row
+    let r-speed item 6 row
+    let r-access item 7 row
+    let r-lane item 8 row
     
     let source-node one-of nodes with [node-id = source-id]
     let target-node one-of nodes with [node-id = target-id]
     
     if source-node != nobody and target-node != nobody and source-node != target-node [
       ask source-node [
-        create-road-with target-node [
+        create-road-to target-node [
           set road-length r-length  
           set road-type r-type
+
+          set road-name r-name
+          set lanes r-lane
+          set max-speed r-speed
+          set access r-access
+          set is-oneway? r-way
           
           set color white
-          set thickness 0.2
+          set thickness 0.1
         ]
       ]
     ]
@@ -115,72 +183,106 @@ to load-map
   
   ; Step 3:
   ; Load buildings
-  ask patches [ 
-    set pcolor green + 3 
-    set zone-type "none"
-    set is-street? false         
-    set is-sidewalk? false       
-  ]
+
   let bldg-data csv:from-file "buildings.csv"
   set bldg-data but-first bldg-data
-  
+
   foreach bldg-data [ row ->
-    let target-x round (item 0 row)
-    let target-y round (item 1 row)
-    let b-category item 2 row
-    
-    if (target-x >= min-pxcor and target-x <= max-pxcor and
-        target-y >= min-pycor and target-y <= max-pycor) [
-      ask patch target-x target-y [
-        set zone-type b-category
+    let target-id item 0 row
+    let target-name item 1 row
+    let target-x item 2 row
+    let target-y item 3 row
+    let target-category item 4 row
+
+
+    if (target-x >= min-pxcor and target-x <= max-pxcor and target-y >= min-pycor and target-y <= max-pycor) [
+      create-buildings 1 [
+      setxy target-x target-y
+      set category target-category
+      set name target-name
+      set building-id target-id
+      set shape "house"
+      set size 0.5
+
+        (ifelse
+          target-category = "commercial" [ set color yellow ]
+          target-category = "school" [ set color blue ]
+          target-category = "residential" [ set color green ]
+          target-category = "special" [ set color violet ]
+          target-category = "miscellaneous" [ set color [150 75 0 180] ] ; brown slightly transparent (RGBA)
+        )
       ]
     ]
+    
   ]
+
+
+  ; ask patches [ 
+  ;   set pcolor green + 3 
+  ;   set zone-type "none"
+  ;   set is-street? false         
+  ;   set is-sidewalk? false       
+  ; ]
+  ; let patch-data csv:from-file "buildings.csv"
+  ; set patch-data but-first patch-data
+  
+  ; foreach patch-data [ row ->
+  ;   let target-x round (item 0 row)
+  ;   let target-y round (item 1 row)
+  ;   let b-category item 2 row
+    
+  ;   if (target-x >= min-pxcor and target-x <= max-pxcor and
+  ;       target-y >= min-pycor and target-y <= max-pycor) [
+  ;     ask patch target-x target-y [
+  ;       set zone-type b-category
+  ;     ]
+  ;   ]
+  ; ]
   
 ; ----------------------------------------------------
   ; 3.5 PAVE ROADS AND SIDEWALKS
   ; ----------------------------------------------------
   
-; Step A: Roads
-  ask roads [
-    let n1 end1
-    let n2 end2
+; ; Step A: Roads
+;   ask roads [
+;     let n1 end1
+;     let n2 end2
     
-    ; Ask the first intersection to look around itself
-    ask n1 [
-      ; Measure the actual visual distance on the grid
-      let visual-length distance n2 
+;     ; Ask the first intersection to look around itself
+;     ask n1 [
+;       ; Measure the actual visual distance on the grid
+;       let visual-length distance n2 
       
-      ; Now that a turtle is asking, in-radius works!
-      ask patches in-radius (visual-length + 1) [
+;       ; Now that a turtle is asking, in-radius works!
+;       ask patches in-radius (visual-length + 1) [
         
-        ; If the patch falls along the line between the two intersections, pave it
-        if distance n1 + distance n2 <= visual-length + 0.5 [
-          set is-street? true
-          ;set pcolor gray - 2
-        ]
-      ]
-    ]
-  ]
+;         ; If the patch falls along the line between the two intersections, pave it
+;         if distance n1 + distance n2 <= visual-length + 0.5 [
+;           set is-street? true
+;           ;set pcolor gray - 2
+;         ]
+;       ]
+;     ]
+;   ]
 
-; First layer (already in your code)
-  ask patches with [is-street?] [
-    ask neighbors [
-      if not is-street? [
-        set is-sidewalk? true
-        ;set pcolor gray + 2
-      ]
-    ]
-  ]
-; Second layer
-  ask patches with [is-sidewalk?] [
-    ask neighbors [
-      if not is-street? and not is-sidewalk? [
-        set is-sidewalk? true
-        ;set pcolor gray + 2
-      ]
-    ]
-  ]
+; ; First layer (already in your code)
+;   ask patches with [is-street?] [
+;     ask neighbors [
+;       if not is-street? [
+;         set is-sidewalk? true
+;         ;set pcolor gray + 2
+;       ]
+;     ]
+;   ]
+; ; Second layer
+;   ask patches with [is-sidewalk?] [
+;     ask neighbors [
+;       if not is-street? and not is-sidewalk? [
+;         set is-sidewalk? true
+;         ;set pcolor gray + 2
+;       ]
+;     ]
+;   ]
 
 
   reset-ticks
@@ -194,6 +296,8 @@ to load-map
   ;  set route []
   ;]
 
+  set draft-jeepney-route-nodes []
+  
 
 end
 
@@ -233,7 +337,6 @@ to spawn-pedestrians
       set distance-walked 0
       set walking-time 0
       
-      set shape "circle"
       set shape "person"
       set size 1.5
       set color red
@@ -257,90 +360,163 @@ end
 ; Record routes
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
+to record-click
 
+  ; Check if the user is clicking the left mouse button
+  if mouse-down? [
+    
+    ; Find the intersection closest to where the mouse clicked
+    let clicked-node min-one-of nodes [distancexy mouse-xcor mouse-ycor]
+    
+    if clicked-node != nobody [
+      
+      ; Initialize the list if it's empty
+      if not is-list? draft-jeepney-route-nodes [ set draft-jeepney-route-nodes [] ]
+      
+      ; Add the node's ID to our list
+      set draft-jeepney-route-nodes lput [node-id] of clicked-node draft-jeepney-route-nodes
+      
+      ; Visual Feedback: Turn the node big and yellow so you know you clicked it!
+      ask clicked-node [
+        set color yellow
+        set size 2
+      ]
+      
+      ; CRITICAL: Wait until the user lets go of the mouse button. 
+      ; Otherwise, holding the click for 0.1 seconds will add the node 50 times!
+      while [mouse-down?] [ wait 0.05 ]
+    ]
+  ]
+
+end
+
+
+to export-route
+  if empty? draft-jeepney-route-nodes [
+    user-message "You haven't clicked any nodes yet!"
+    stop
+  ]
+  
+  let master-route-list []
+  
+  ; Stitch the path between each clicked waypoint
+  let i 0
+  while [i < length draft-jeepney-route-nodes - 1] [
+    let start-id item i draft-jeepney-route-nodes
+    let end-id item (i + 1) draft-jeepney-route-nodes
+    
+    let start-node one-of nodes with [node-id = start-id]
+    let end-node one-of nodes with [node-id = end-id]
+    
+    ; Ask the start node to run A* to the end node
+    let segment [nw:turtles-on-weighted-path-to end-node "road-length"] of start-node
+    
+    ; Add this segment to our master list (avoiding duplicate nodes where segments join)
+    if is-list? segment [
+      foreach but-last segment [ n -> 
+        set master-route-list lput (list [node-id] of n) master-route-list
+      ]
+    ]
+    
+    set i i + 1
+  ]
+  
+  ; Add the very last node to close the loop
+  let final-node one-of nodes with [node-id = last draft-jeepney-route-nodes]
+  set master-route-list lput [node-id] of final-node master-route-list
+  
+  ; Save to CSV!
+  csv:to-file "jeepney_route.csv" master-route-list
+  
+  user-message "Route successfully saved to jeepney_route.csv!"
+  
+  ; Reset the tool
+  set draft-jeepney-route-nodes []
+  ask nodes [ set color red set size 0.5 ] ; Revert colors
+end
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ; Go
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 to go
 
   ; Pedestrian Logic
-  ask pedestrians [
+  ; ask pedestrians [
     
-    ; 1. Pick destination if needed
+  ;   ; 1. Pick destination if needed
     
     
-    if not is-list? route or empty? route [
+  ;   if not is-list? route or empty? route [
     
-      ; This is the condition for allelomimesis
-      let check-allelomimesis random-float 1.0
+  ;     ; This is the condition for allelomimesis
+  ;     let check-allelomimesis random-float 1.0
       
 
-      set destination-building one-of patches with [zone-type != "none" and zone-type != "residential"]
+  ;     set destination-building one-of patches with [zone-type != "none" and zone-type != "residential"]
 
-      if check-allelomimesis <= allelomimetic [
-        let nearby-people other pedestrians in-radius 2
-        if any? nearby-people [
-          let person-to-copy one-of nearby-people
-          let copied-destination [destination-building] of person-to-copy
+  ;     if check-allelomimesis <= allelomimetic [
+  ;       let nearby-people other pedestrians in-radius 2
+  ;       if any? nearby-people [
+  ;         let person-to-copy one-of nearby-people
+  ;         let copied-destination [destination-building] of person-to-copy
 
-          if is-patch? copied-destination  [
-            set destination-building copied-destination
-          ]
+  ;         if is-patch? copied-destination  [
+  ;           set destination-building copied-destination
+  ;         ]
 
-          set route []
-        ]
-      ]
+  ;         set route []
+  ;       ]
+  ;     ]
 
-      ; set destination-node one-of nodes
+  ;     ; set destination-node one-of nodes
       
-      let target-patch destination-building ; need to separate it into a variable since nodes don't know what a 'destination-building' is
-      let closest-node-to-destination min-one-of nodes [distance target-patch]
+  ;     let target-patch destination-building ; need to separate it into a variable since nodes don't know what a 'destination-building' is
+  ;     let closest-node-to-destination min-one-of nodes [distance target-patch]
       
-      let my-node min-one-of nodes [distance myself]
-      let my-dest destination-node 
-      
-
-      ; Decide if pedestrian wants to walk or go to a traffic stop
+  ;     let my-node min-one-of nodes [distance myself]
+  ;     let my-dest destination-node 
       
 
-      set route [nw:turtles-on-weighted-path-to closest-node-to-destination "road-length"] of my-node
+  ;     ; Decide if pedestrian wants to walk or go to a traffic stop
       
-      ifelse route != false [
-        if not empty? route [
-          if first route = my-node [
-            set route but-first route
-          ]
-        ]
+
+  ;     set route [nw:turtles-on-weighted-path-to closest-node-to-destination "road-length"] of my-node
+      
+  ;     ifelse route != false [
+  ;       if not empty? route [
+  ;         if first route = my-node [
+  ;           set route but-first route
+  ;         ]
+  ;       ]
         
-        set route lput destination-building route
-      ] [
-        set route [] 
-      ]
-    ]
+  ;       set route lput destination-building route
+  ;     ] [
+  ;       set route [] 
+  ;     ]
+  ;   ]
 
-    ; Passenger boarding and alighting
+  ;   ; Passenger boarding and alighting
     
-    ; 2. Walk
-    if is-list? route and not empty? route [
-      let next-node first route
+  ;   ; 2. Walk
+  ;   if is-list? route and not empty? route [
+  ;     let next-node first route
       
-      face next-node
+  ;     face next-node
 
-      let vehicle-in-front other vehicles in-cone 1 45
-      if not any? vehicle-in-front [
-        fd speed
-      ]
+  ;     let vehicle-in-front other vehicles in-cone 1 45
+  ;     if not any? vehicle-in-front [
+  ;       fd speed
+  ;     ]
       
-      if distance next-node < speed [
-        move-to next-node
-        set route but-first route
-      ]
-    ]
+  ;     if distance next-node < speed [
+  ;       move-to next-node
+  ;       set route but-first route
+  ;     ]
+  ;   ]
     
-    ; 3. Increment counters
-    set distance-walked distance-walked + speed
-    set walking-time walking-time + 1
-  ]
+  ;   ; 3. Increment counters
+  ;   set distance-walked distance-walked + speed
+  ;   set walking-time walking-time + 1
+  ; ]
 
 
   ; Vehicle Logic
@@ -370,19 +546,23 @@ to go
       if is-list? route and not empty? route [
       let next-node first route
       
-      face next-node
-      fd speed
-      
-      if distance next-node < speed [
-        move-to next-node
-        set route but-first route
+      if current-capacity > 0 [
+        face next-node
+        fd speed
+        
+        if distance next-node < speed [
+          move-to next-node
+          set route but-first route
+        ]
       ]
+      
+
     ]
   ]
   tick
 end]]></code>
   <widgets>
-    <view x="368" wrappingAllowedX="false" y="10" frameRate="30.0" minPycor="0" height="539" showTickCounter="true" patchSize="5.0" fontSize="10" wrappingAllowedY="false" width="539" tickCounterLabel="ticks" maxPycor="100" updateMode="1" maxPxcor="100" minPxcor="0"></view>
+    <view x="368" wrappingAllowedX="false" y="10" frameRate="30.0" minPycor="0" height="2145" showTickCounter="true" patchSize="20.0" fontSize="10" wrappingAllowedY="false" width="2145" tickCounterLabel="ticks" maxPycor="100" updateMode="1" maxPxcor="100" minPxcor="0"></view>
     <button x="105" y="370" height="40" disableUntilTicks="false" forever="false" kind="Observer" width="76" display="Load Map">load-map</button>
     <button x="195" y="370" height="40" disableUntilTicks="false" forever="true" kind="Observer" width="55" display="go">go</button>
     <button x="260" y="370" height="40" disableUntilTicks="false" forever="false" kind="Observer" width="55" display="Reset">clear-all</button>
@@ -390,6 +570,26 @@ end]]></code>
     <button x="75" y="320" height="40" disableUntilTicks="false" forever="false" kind="Observer" width="105" display="Spawn Vehicles">spawn-vehicles</button>
     <button x="230" y="270" height="40" disableUntilTicks="false" forever="true" kind="Observer" width="101">record-click</button>
     <button x="130" y="270" height="40" disableUntilTicks="false" forever="false" kind="Observer" width="90">export-route</button>
+    <button x="85" y="210" height="40" disableUntilTicks="false" forever="false" kind="Observer" width="135" display="Show/Hide Buildings">set buildings-hidden not buildings-hidden
+
+ask buildings [
+  set hidden? buildings-hidden
+]</button>
+    <button x="230" y="210" height="40" disableUntilTicks="false" forever="false" kind="Observer" width="110" display="Show/Hide Nodes">set nodes-hidden not nodes-hidden
+
+ask nodes [
+  set hidden? nodes-hidden
+]</button>
+    <button x="255" y="155" height="40" disableUntilTicks="false" forever="false" kind="Observer" width="100" display="Show/Hide Vehicles">set vehicles-hidden not vehicles-hidden
+
+ask vehicles [
+  set hidden? vehicles-hidden
+]</button>
+    <button x="135" y="155" height="40" disableUntilTicks="false" forever="false" kind="Observer" width="115" display="Show/Hide Pedestrians">set pedestrians-hidden not pedestrians-hidden
+
+ask pedestrians [
+  set hidden? pedestrians-hidden
+]</button>
   </widgets>
   <info>## WHAT IS IT?
 
@@ -1253,12 +1453,48 @@ end]]></code>
         </line>
       </lines>
       <indicator>
+        <shape name="link direction" rotatable="true" editableColorIndex="0"></shape>
+      </indicator></shape>
+    <shape name="dupe" curviness="0.0">
+      <lines>
+        <line x="-0.2" visible="false">
+          <dash value="0.0"></dash>
+          <dash value="1.0"></dash>
+        </line>
+        <line x="0.0" visible="true">
+          <dash value="1.0"></dash>
+          <dash value="0.0"></dash>
+        </line>
+        <line x="0.2" visible="false">
+          <dash value="0.0"></dash>
+          <dash value="1.0"></dash>
+        </line>
+      </lines>
+      <indicator>
         <shape name="link direction" rotatable="true" editableColorIndex="0">
           <line endX="90" startY="150" marked="true" color="-1920102913" endY="180" startX="150"></line>
           <line endX="210" startY="150" marked="true" color="-1920102913" endY="180" startX="150"></line>
         </shape>
       </indicator>
     </shape>
+    <shape name="straight" curviness="0.0">
+      <lines>
+        <line x="-0.2" visible="true">
+          <dash value="1.0"></dash>
+          <dash value="0.0"></dash>
+        </line>
+        <line x="0.0" visible="true">
+          <dash value="1.0"></dash>
+          <dash value="0.0"></dash>
+        </line>
+        <line x="0.2" visible="true">
+          <dash value="1.0"></dash>
+          <dash value="0.0"></dash>
+        </line>
+      </lines>
+      <indicator>
+        <shape name="link direction" rotatable="true" editableColorIndex="0"></shape>
+      </indicator></shape>
   </linkShapes>
   <previewCommands>setup repeat 75 [ go ]</previewCommands>
 </model>
