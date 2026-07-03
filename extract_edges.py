@@ -48,9 +48,9 @@ def fetch_roads(place_name, world_size):
     # Step 3:
     # Apply proper formatting and scale it so that it works in the size of our NetLogo world
     print("Formatting nodes.")
-    nodes_df = nodes.reset_index()[['osmid', 'x', 'y']]
+    nodes_df = nodes.reset_index()[['osmid', 'x', 'y', 'highway']]
 
-    nodes_df.rename(columns={'osmid': 'node_id', 'x': 'x_coord', 'y': 'y_coord'}, inplace=True)
+    nodes_df.rename(columns={'osmid': 'node_id', 'x': 'x_coord', 'y': 'y_coord', 'highway':'highway'}, inplace=True)
 
     # We use the min/max of the nodes to establish the boundary of our NetLogo world
     min_x, max_x = nodes_df['x_coord'].min(), nodes_df['x_coord'].max()
