@@ -49,7 +49,7 @@ buildings-own [
   building-id
   category
   name
-  nearest-road-node ; this will be set during the setup so that we can just check which road node to pathfind to
+  nearest-road-node
 ]
 
 
@@ -230,7 +230,6 @@ to load-map
         set size 0.5
         set hidden? true
         
-       ; we're just assigning different colors to each 'house' symbol for the building
        (ifelse
          target-category = "commercial" [ set color yellow ]
          target-category = "school" [ set color blue ]
@@ -238,13 +237,41 @@ to load-map
          target-category = "special" [ set color violet ]
          target-category = "miscellaneous" [ set color [150 75 0 180] ] ; brown slightly transparent (RGBA)
        )
-        
-        set nearest-road-node min-one-of nodes [distance myself]
+       
+        if target-category = "transport" [
+          set hidden? false
+          set size 1
+          set color [0 255 255]
+          set nearest-road-node min-one-of nodes [distance myself]
+        ]
         
       ]
     ]
     
   ]
+
+
+  ; ask patches [ 
+  ;   set pcolor green + 3 
+  ;   set zone-type "none"
+  ;   set is-street? false         
+  ;   set is-sidewalk? false       
+  ; ]
+  ; let patch-data csv:from-file "buildings.csv"
+  ; set patch-data but-first patch-data
+  
+  ; foreach patch-data [ row ->
+  ;   let target-x round (item 0 row)
+  ;   let target-y round (item 1 row)
+  ;   let b-category item 2 row
+    
+  ;   if (target-x >= min-pxcor and target-x <= max-pxcor and
+  ;       target-y >= min-pycor and target-y <= max-pycor) [
+  ;     ask patch target-x target-y [
+  ;       set zone-type b-category
+  ;     ]
+  ;   
+  ; ]
 
 
   reset-ticks
@@ -299,11 +326,9 @@ to spawn-pedestrians
       set distance-walked 0
       set walking-time 0
       
-      set destination-building one-of buildings
-      
       set shape "person"
       set size 1.2
-      set color blue
+      set color yellow
     ]
   ]
 end
@@ -503,9 +528,7 @@ to go
     ; 1. Pick destination if needed
     ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
     
-    ; if they don't have a destination yet, set a new destination
-    ; this can be done either by allelomimesis or just randomly setting
-    ; on their own
+    
     if not is-list? route or empty? route [
       ; 1.1 Identify allelomimesis
       let check-allelomimesis random-float 1.0
@@ -521,34 +544,96 @@ to go
         set destination-building one-of buildings
       ]
       
-      
       ; once we have a destination, determine if we're gonna walk or ride a jeep
       let check-transportation-preference random-float 1.0
-      
-      ; additionally, check if the distance is too far
-      ; for now, this is gonna be using basic euclidean distance
-      let is-too-far? (distance destination-building > distance-tolerance)
-   
-      ifelse (check-transportation-preference < transportation-preference) and (not is-too-far?)
+      ifelse check-transportation-preference < transportation-preference 
       [
         set status "walking-to-stop"
-        ; set a new route to the nearest stop that leads to their destination
+        set color green
       ]
       [
         set status "walking"
-        ; set a new route to their destination just by walking
-        
-        ; determine the node via road that is closest to their destination building
-        let closest-road-node-to-pedestrian min-one-of nodes [distance myself]
-        let closest-road-node-to-destination [nearest-road-node] of destination-building
-        
-        let route-from-road-to-destination [nw:turtles-on-weighted-path-to closest-road-node-to-destination "road-length"] of closest-road-node-to-pedestrian  
-        set route lput destination-building route-from-road-to-destination
       ]
-      
     ]
     
+    ; handle waiting for a ride at the stop
+    ask pedestrians [
     
+    ; 1. Pick destination if needed
+    
+    
+    if not is-list? route or empty? route [
+    
+      ; This is the condition for allelomimesis
+      let check-allelomimesis random-float 1.0
+      
+
+      set destination-building one-of patches with [zone-type != "none" and zone-type != "residential"]
+
+      if check-allelomimesis <= allelomimetic [
+        let nearby-people other pedestrians in-radius 2 ; change to allelomimesis-radius
+        if any? nearby-people [
+          let person-to-copy one-of nearby-people
+          let copied-destination [destination-building] of person-to-copy
+
+          if is-turtle? copied-destination  [
+            set destination-building copied-destination
+          ]
+
+          set route []
+        ]
+      ]
+
+      ; set destination-node one-of nodes
+      
+      let target-patch destination-building ; need to separate it into a variable since nodes don't know what a 'destination-building' is
+      let closest-node-to-destination min-one-of nodes [distance target-patch]
+      
+      let my-node min-one-of nodes [distance myself]
+      let my-dest destination-node 
+      
+
+      ; Decide if pedestrian wants to walk or go to a traffic stop
+      
+
+      set route [nw:turtles-on-weighted-path-to closest-node-to-destination "road-length"] of my-node
+      
+      ifelse route != false [
+        if not empty? route [
+          if first route = my-node [
+            set route but-first route
+          ]
+        ]
+        
+        set route lput destination-building route
+      ] [
+        set route [] 
+      ]
+    ]
+
+    ; Passenger boarding and alighting
+    
+    ; 2. Walk
+    if is-list? route and not empty? route [
+      let next-node first route
+      
+      face next-node
+
+      let vehicle-in-front other vehicles in-cone 1 45
+      if not any? vehicle-in-front [
+        fd speed
+      ]
+      
+      if distance next-node < speed [
+        move-to next-node
+        set route but-first route
+      ]
+    ]
+    
+    ; 3. Increment counters
+    set distance-walked distance-walked + speed
+    set walking-time walking-time + 1
+  ]
     
     
     ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
@@ -560,47 +645,27 @@ to go
       ; just move them along with the jeepney that they are riding
       status = "riding"
       [
-        set color violet
       ]
       
       ; normal walking procedure
       status = "walking"
       [
-        set color green
-        if is-list? route and not empty? route [
-          let next-node first route
-          face next-node
-          
-          
-          ifelse distance next-node < speed [
-            move-to next-node
-            set route but-first route
-          ] [
-            fd speed
-          ]
-
-        ]
-        ; increment counters for the pedestrian
-        set distance-walked distance-walked + speed
-        set walking-time walking-time + 1
       ]
       
       ; only purpose is to walk to the stop for their next destination change to waiting as soon as done
       status = "walking-to-stop"
       [
-        set color orange
       ]
       
       ; waiting for a jeepney at their stop, change to riding once onboarding
       status = "waiting"
       [
-        set color yellow
       ]
       
     )
   ]
   
-
+  
 
 
   ; Vehicle Logic
