@@ -27,7 +27,6 @@ SPEED_MAP = {
 
 def fetch_roads(place_name, world_size):
     print("Fetching roads.")
-    # Step 1:
     # Fetch road networks and walkways
     
     # 'all' fetches drivable roads AND pedestrian walkways/paths
@@ -44,24 +43,23 @@ def fetch_roads(place_name, world_size):
     stops = ox.features_from_place(place_name, tags=tags)
     stops = stops[stops[['public_transport', 'highway']].notna().any(axis=1)]
     stops.to_csv('stops.csv', index=True)
-# gdf = gdf[gdf[['col1', 'col2', 'col3']].notna().any(axis=1)]
-    # Step 3:
+    # gdf = gdf[gdf[['col1', 'col2', 'col3']].notna().any(axis=1)]
+
     # Apply proper formatting and scale it so that it works in the size of our NetLogo world
     print("Formatting nodes.")
     nodes_df = nodes.reset_index()[['osmid', 'x', 'y', 'highway']]
 
     nodes_df.rename(columns={'osmid': 'node_id', 'x': 'x_coord', 'y': 'y_coord', 'highway':'highway'}, inplace=True)
 
-    # We use the min/max of the nodes to establish the boundary of our NetLogo world
+    # get the boundary of the netlogo world based on the min and max X & Y coordinates
     min_x, max_x = nodes_df['x_coord'].min(), nodes_df['x_coord'].max()
     min_y, max_y = nodes_df['y_coord'].min(), nodes_df['y_coord'].max()
 
-    # Scale nodes to 0-100 grid
+    # scale to world size
     nodes_df['x_coord'] = ((nodes_df['x_coord'] - min_x) / (max_x - min_x)) * world_size
     nodes_df['y_coord'] = ((nodes_df['y_coord'] - min_y) / (max_y - min_y)) * world_size
     nodes_df.to_csv('nodes.csv', index=False)
 
-    # Step 4: 
     edges_df = edges.reset_index()[['u', 'v', 'length', 'highway', 'name', 'oneway', 'speed_kph', 'access', 'lanes']]
     edges_df.rename(columns={
             'u': 'source_node_id', 
@@ -82,7 +80,7 @@ def fetch_roads(place_name, world_size):
     edges_df.to_csv("edges.csv", index=False)
     print("Saving map image.")
 
-    # This plots the road network and saves it as a high-res JPEG
+    #Ssave as image for checking
     fig, ax = ox.plot_graph(
         G, 
         show=False, 
@@ -155,6 +153,7 @@ def categorize_building(row):
         if category:
             return category
 
+    # fallback
     return 'miscellaneous'
     
 # Categorize each building
@@ -185,7 +184,6 @@ def give_building_names(row):
     pass
 
 def fetch_nodes(place_name, min_x, max_x, min_y, max_y, world_size):
-    # Step 2:
     # Fetch buildings and get their 'tags'
     print("Fetching buildings.")
     # tags = {'building': True, 'amenity': ['school', 'college', 'university', 'hospital', 'clinic'], 'highway':'crossing'}
