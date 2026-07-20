@@ -434,12 +434,13 @@ to load-route
     
     let translated-route []
     
-    foreach loaded-route [
+    foreach loaded-route [ loaded-id ->
       let loaded-node one-of nodes with [node-id = loaded-id]
       ask loaded-node [
         set routes lput loaded-name routes
       ]
       
+      set translated-route lput loaded-node translated-route
     ]
     set complete-jeepney-routes lput translated-route complete-jeepney-routes
   ])
