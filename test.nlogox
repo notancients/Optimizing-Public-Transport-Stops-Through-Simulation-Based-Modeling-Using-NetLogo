@@ -30,6 +30,7 @@ nodes-own [
   node-id 
   is-route-end?
   is-transport-stop?
+  routes ; list that contains all routes that a node belongs to
 ]
 
 
@@ -98,7 +99,8 @@ vehicles-own [
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-
+to thetop 
+end
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ; Fetch roads
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
@@ -139,6 +141,7 @@ to load-map
   set buildings-hidden true
   set vehicles-hidden false
   set pedestrians-hidden false
+  set was-mouse-down? false
   
   set is-editing-route? false
   set was-editing-route? false
@@ -166,6 +169,7 @@ to load-map
       set color [255 0 0 128]
       set hidden? nodes-hidden
       set is-transport-stop? true
+      set routes []
     ]
   ]
 
@@ -318,97 +322,66 @@ end
 ; Record routes
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
-to record-click
+to record-route
 
-  if (not is-editing-route?) and was-editing-route? [
-    if is-list? draft-jeepney-route-nodes and not empty? draft-jeepney-route-nodes [
-;      set incomplete-jeepney-routes lput draft-jeepney-route-nodes incomplete-jeepney-routes
-      
-      let complete-current-route []
-      
-      let first-node one-of nodes with [node-id = first draft-jeepney-route-nodes]
-
-      
-      let i 0
-      while [i < length draft-jeepney-route-nodes - 1] [
-        let start-id item i draft-jeepney-route-nodes
-        let end-id item (i + 1) draft-jeepney-route-nodes
-        
-        let start-node one-of nodes with [node-id = start-id]
-        let end-node one-of nodes with [node-id = end-id]
-        
-        ; Ask the start node to run A* to the end node
-        ; this results in a list of nodes that would go from the 1 node to the next node but
-        ; since there can be plenty of node gaps in between, they will be more 
-        let segment [nw:turtles-on-weighted-path-to end-node "road-length"] of start-node
-        
-        ; Add this segment to our master list (avoiding duplicate nodes where segments join)
-        if is-list? segment [
-          foreach but-last segment [ n -> 
-            set complete-current-route lput ([node-id] of n) complete-current-route
-          ]
-        ]
-        
-        set i i + 1
-      ]
-      
-      ; Add the very last node to close the loop
-      let final-node one-of nodes with [node-id = last draft-jeepney-route-nodes]
-      set complete-current-route lput [node-id] of final-node complete-current-route
-      
-      ask first-node [
-        set is-route-end? true
-      ]
-      
-      ask final-node [
-        set is-route-end? true
-      ]
-      
-      set incomplete-jeepney-routes lput complete-current-route incomplete-jeepney-routes
-      
-      let turtle-complete-current-route map [
-        id -> one-of nodes with [node-id = id]
-      ] complete-current-route
-      
-      set complete-jeepney-routes lput turtle-complete-current-route complete-jeepney-routes
-    ]
-    
-
-    
-    set draft-jeepney-route-nodes []
-    set is-editing-route? false
-  ]
+  ; record clicks
   
   
-
-  ;; allow clicking only while editing
+  
   if is-editing-route? [
-
-    ;; detect SINGLE click
+    ; need to check if the mouse was not clicked previously to save just one click
     if mouse-down? and not was-mouse-down? [
-      
       let clicked-node min-one-of nodes [distancexy mouse-xcor mouse-ycor]
       
+      ; if there was a clicked node
       if clicked-node != nobody [
+        print (word "CLICKED Node " [who] of clicked-node " | OSM: " [node-id] of clicked-node " | Stop?: " [is-transport-stop?] of clicked-node)
         
         if not is-list? draft-jeepney-route-nodes [
+          print (word "NOT LIST CONDITION")
           set draft-jeepney-route-nodes []
         ]
         
-        set draft-jeepney-route-nodes lput ([node-id] of clicked-node) draft-jeepney-route-nodes
+        ; set draft-jeepney-route-nodes lput ([node-id] of clicked-node) draft-jeepney-route-nodes
+        ifelse empty? draft-jeepney-route-nodes
+        [
+          print (word "First node!")
+          set draft-jeepney-route-nodes lput clicked-node draft-jeepney-route-nodes
+        ]
+        [
+         print length draft-jeepney-route-nodes
+         let last-added-node last draft-jeepney-route-nodes
+         
+         let road-segment [nw:turtles-on-weighted-path-to clicked-node "road-length"] of last-added-node
+         print (word "Road segment: " road-segment)
+         let temp-list sentence draft-jeepney-route-nodes but-first road-segment
+         set draft-jeepney-route-nodes temp-list
+        ]
         
         ask clicked-node [
           set color yellow
         ]
+        
+        
       ]
     ]
+    set was-mouse-down? mouse-down?
+  ]
+  
+  ; save route
+  if not is-editing-route? [
+    let route-name user-input "Enter route name: "
+    foreach draft-jeepney-route-nodes [ element ->
+      ask element [
+        set routes lput route-name routes
+      ]
+    ]
+    
+    set complete-jeepney-routes lput draft-jeepney-route-nodes complete-jeepney-routes
+    set draft-jeepney-route-nodes []
+    stop
   ]
 
-  ;; update states
-  set was-mouse-down? mouse-down?
-  set was-editing-route? is-editing-route?
-
-  
 end
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
@@ -700,11 +673,10 @@ ask nodes [
 ask buildings [
   set hidden? buildings-hidden
 ]</button>
-    <button x="20" y="105" height="40" disableUntilTicks="false" forever="false" kind="Observer" width="76" display="Load Map">load-map</button>
     <button x="235" y="205" height="40" disableUntilTicks="false" forever="false" kind="Observer" width="125" display="Spawn Pedestrians">spawn-pedestrians</button>
     <button x="125" y="205" height="40" disableUntilTicks="false" forever="false" kind="Observer" width="105" display="Spawn Vehicles">spawn-vehicles</button>
     <button x="15" y="205" height="40" disableUntilTicks="false" forever="false" kind="Observer" width="105" display="Spawn Jeepneys">spawn-jeepneys</button>
-    <button x="240" y="300" height="40" disableUntilTicks="false" forever="true" kind="Observer" width="110" display="Record clicks">record-click</button>
+    <button x="240" y="300" height="40" disableUntilTicks="false" forever="true" kind="Observer" width="110" display="Record clicks">record-route</button>
     <input x="220" multiline="false" y="350" height="60" variable="global-jeep-capacity" type="string" width="135">[ 20 22 24 ]</input>
     <input x="20" multiline="false" y="350" height="65" variable="jeepney-per-route" type="string" width="195">[ 2 ]</input>
     <switch x="115" y="300" height="40" on="false" variable="is-editing-route?" width="120" display="is-editing-route?"></switch>
@@ -714,6 +686,16 @@ ask buildings [
     <button x="270" y="510" height="40" disableUntilTicks="false" forever="false" kind="Observer" width="84" display="Genocide">ask pedestrians [ die ]
 reset-ticks</button>
     <monitor x="90" precision="0" y="640" height="60" fontSize="11" width="100" display="Pedestrian count">count pedestrians</monitor>
+    <button x="155" y="465" height="40" disableUntilTicks="false" forever="false" kind="Observer" width="76" display="Load Map">load-map</button>
+    <button x="145" y="510" height="40" disableUntilTicks="false" forever="false" kind="Observer" width="115" display="Route Debugging">print (word "Draft: " draft-jeepney-route-nodes)
+print (word "Complete: " complete-jeepney-routes)</button>
+    <button x="45" y="510" height="40" disableUntilTicks="false" forever="false" kind="Observer" width="90" display="Reset routes">set draft-jeepney-route-nodes []
+set complete-jeepney-routes []
+ask nodes [set color red]
+set is-editing-route? false
+clear-output</button>
+    <note x="20" y="255" backgroundDark="0" fontSize="12" width="310" markdown="false" height="41" textColorDark="-1" textColorLight="-16777216" backgroundLight="0">To create a route, toggle switch, click Record Clicks.
+Once satisfied, untoggle switch.</note>
   </widgets>
   <info>## WHAT IS IT?
 
