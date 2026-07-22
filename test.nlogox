@@ -31,6 +31,7 @@ nodes-own [
   is-route-end?
   is-transport-stop?
   routes ; list that contains all routes that a node belongs to
+  in-drivable-path? ; would mostly be used only for route checking/pathfinding; other details would still be reliant on road-type
 ]
 
 
@@ -54,11 +55,6 @@ buildings-own [
 ]
 
 
-patches-own [ 
-  zone-type       ;
-  is-street?      ; Boolean
-  is-sidewalk?    ; Boolean
-]
 breed [ pedestrians pedestrian ]
 
 pedestrians-own [ 
@@ -101,8 +97,25 @@ vehicles-own [
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 to thetop 
 end
+
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-; Fetch roads
+; Networking helper functions
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
+to context-use-road-network-only
+  nw:set-context nodes roads with [
+    member? road-type ["primary" "secondary" "tertiary" "residential"]
+    and
+    not member? access ["no" "private"]
+  ]
+end
+
+to context-reset-network
+  nw:set-context nodes roads
+end
+
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+; Map Setup
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
 to fetch-roads
@@ -113,15 +126,11 @@ to fetch-roads
 end
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-; Fetch buildings
-;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
 to fetch-buildings
 
 end
 
-;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-; Generate synthetic population
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
 to generate-population
@@ -129,14 +138,11 @@ to generate-population
 end
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-; Load Map
-;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
 to load-map
   clear-all
   
-  ;;;;;;;;;;;;;;;;;;;;;
   ; Initialize globals
-  ;;;;;;;;;;;;;;;;;;;;;
   set nodes-hidden false
   set buildings-hidden true
   set vehicles-hidden false
@@ -149,12 +155,7 @@ to load-map
   set complete-jeepney-routes []
   set route-names []
   
-  ;;;;;;;;;;;;;;;;;;;;;
-  ; 
-  ;;;;;;;;;;;;;;;;;;;;;  
   
-  ; Step 1:
-  ; Load intersection nodes
   let node-data csv:from-file "nodes.csv"
   set node-data but-first node-data
   
@@ -173,7 +174,6 @@ to load-map
     ]
   ]
 
-  ; Step 2:
   ; Load edges (streets and walkways)
   let edge-data csv:from-file "edges.csv"
   set edge-data but-first edge-data 
@@ -211,9 +211,15 @@ to load-map
     ]
   ]
   
-  ; Step 3:
+  ; add the helper tag for the node clicking function to reduce load whenever clicking
+  ask nodes [
+    set in-drivable-path? 
+    any? my-in-roads with [ member? road-type ["primary" "secondary" "tertiary" "residential"] and not member? access ["no" "private"] ]
+    or
+    any? my-out-roads with [ member? road-type ["primary" "secondary" "tertiary" "residential"] and not member? access ["no" "private"] ]
+  ]
+ 
   ; Load buildings
-
   let bldg-data csv:from-file "buildings.csv"
   set bldg-data but-first bldg-data
 
@@ -255,8 +261,6 @@ to load-map
 
 
   reset-ticks
-
-  set draft-jeepney-route-nodes []
   
 
 end
@@ -323,15 +327,12 @@ end
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
 to record-route
-
-  ; record clicks
-  
-  
+  context-use-road-network-only
   
   if is-editing-route? [
     ; need to check if the mouse was not clicked previously to save just one click
     if mouse-down? and not was-mouse-down? [
-      let clicked-node min-one-of nodes [distancexy mouse-xcor mouse-ycor]
+      let clicked-node min-one-of (nodes with [in-drivable-path?]) [distancexy mouse-xcor mouse-ycor]
       
       ; if there was a clicked node
       if clicked-node != nobody [
@@ -353,13 +354,20 @@ to record-route
          
          let road-segment [nw:turtles-on-weighted-path-to clicked-node "road-length"] of last-added-node
          print (word "Road segment: " road-segment)
-         let temp-list sentence draft-jeepney-route-nodes but-first road-segment
-         set draft-jeepney-route-nodes temp-list
-        ]
+
+         ifelse is-list? road-segment
+         [
+            let temp-list sentence draft-jeepney-route-nodes but-first road-segment
+            set draft-jeepney-route-nodes temp-list
+            
+            ; temporarily color the road segments
+            
+         ]
+         [
+            print (word "That is an invalid next node. Please select a different route.")
+         ] ; end of checking for road segment
         
-        ask clicked-node [
-          set color yellow
-        ]
+        ] ; end of checking for empty draft nodes
         
         
       ]
@@ -368,7 +376,7 @@ to record-route
   ]
   
   ; save route
-  if not is-editing-route? [
+  if not is-editing-route? and length draft-jeepney-route-nodes > 1 [
     let route-name user-input "Enter route name: "
     foreach draft-jeepney-route-nodes [ element ->
       ask element [
@@ -380,9 +388,11 @@ to record-route
     
     set complete-jeepney-routes lput draft-jeepney-route-nodes complete-jeepney-routes
     set draft-jeepney-route-nodes []
+    
+    ; context-reset-network
+    
     stop
   ]
-
 end
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
@@ -740,6 +750,17 @@ clear-output</button>
     <note x="20" y="255" backgroundDark="0" fontSize="12" width="310" markdown="false" height="41" textColorDark="-1" textColorLight="-16777216" backgroundLight="0">To create a route, toggle switch, click Record Clicks.
 Once satisfied, untoggle switch.</note>
     <button x="60" y="460" height="40" disableUntilTicks="false" forever="false" kind="Observer" width="85" display="Load Routes">load-route</button>
+    <button x="75" y="105" height="40" disableUntilTicks="false" forever="false" kind="Observer" width="135" display="Show/Hide Footpaths">ask roads [
+  if member? road-type ["footway" "path" "cycleway" "steps"] [
+    set hidden? not hidden?
+  ]
+]
+
+ask nodes [
+  if not in-drivable-path? [
+    set hidden? hidden?
+  ]
+]</button>
   </widgets>
   <info>## WHAT IS IT?
 
