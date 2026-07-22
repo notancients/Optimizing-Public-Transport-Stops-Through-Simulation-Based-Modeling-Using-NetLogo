@@ -214,9 +214,9 @@ to load-map
   ; add the helper tag for the node clicking function to reduce load whenever clicking
   ask nodes [
     set in-drivable-path? 
-    any? my-in-roads with [ member? road-type ["primary" "secondary" "tertiary" "residential"] and not member? access ["no" "private"] ]
+    any? my-in-roads with [ member? road-type ["primary" "secondary" "tertiary" "residential"] ]
     or
-    any? my-out-roads with [ member? road-type ["primary" "secondary" "tertiary" "residential"] and not member? access ["no" "private"] ]
+    any? my-out-roads with [ member? road-type ["primary" "secondary" "tertiary" "residential"] ]
   ]
  
   ; Load buildings
@@ -750,7 +750,7 @@ clear-output</button>
     <note x="20" y="255" backgroundDark="0" fontSize="12" width="310" markdown="false" height="41" textColorDark="-1" textColorLight="-16777216" backgroundLight="0">To create a route, toggle switch, click Record Clicks.
 Once satisfied, untoggle switch.</note>
     <button x="60" y="460" height="40" disableUntilTicks="false" forever="false" kind="Observer" width="85" display="Load Routes">load-route</button>
-    <button x="75" y="105" height="40" disableUntilTicks="false" forever="false" kind="Observer" width="135" display="Show/Hide Footpaths">ask roads [
+    <button x="215" y="420" height="40" disableUntilTicks="false" forever="false" kind="Observer" width="135" display="Show/Hide Footpaths">ask roads [
   if member? road-type ["footway" "path" "cycleway" "steps"] [
     set hidden? not hidden?
   ]
@@ -758,7 +758,7 @@ Once satisfied, untoggle switch.</note>
 
 ask nodes [
   if not in-drivable-path? [
-    set hidden? hidden?
+    set hidden? not hidden?
   ]
 ]</button>
   </widgets>
