@@ -22,6 +22,9 @@ globals [
   route-names
   draft-jeepney-route-nodes ; this will hold the list of nodes
   complete-jeepney-routes; list of lists contains a list of all TURTLE nodes per route
+  
+  routes-highlighted?
+  ;;;;;;;;;;;;;;;;;;;;;
 ]
 
 ; Agents and road network
@@ -154,6 +157,8 @@ to load-map
   set draft-jeepney-route-nodes []
   set complete-jeepney-routes []
   set route-names []
+  set routes-highlighted? false
+  ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
   
   
   let node-data csv:from-file "nodes.csv"
@@ -213,10 +218,11 @@ to load-map
   
   ; add the helper tag for the node clicking function to reduce load whenever clicking
   ask nodes [
+    let drivable-types ["primary" "secondary" "tertiary" "residential" "service"]
     set in-drivable-path? 
-    any? my-in-roads with [ member? road-type ["primary" "secondary" "tertiary" "residential"] ]
+    any? my-in-roads with [ member? road-type drivable-types ]
     or
-    any? my-out-roads with [ member? road-type ["primary" "secondary" "tertiary" "residential"] ]
+    any? my-out-roads with [ member? road-type drivable-types ]
   ]
  
   ; Load buildings
@@ -327,21 +333,31 @@ end
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
 to record-route
-  context-use-road-network-only
   
   if is-editing-route? [
     ; need to check if the mouse was not clicked previously to save just one click
     if mouse-down? and not was-mouse-down? [
+      
+      ; this is for resetting all the colored nodes
+      ask nodes with [color = green] [
+        set color red
+        set size 0.3
+      ]
+      
       let clicked-node min-one-of (nodes with [in-drivable-path?]) [distancexy mouse-xcor mouse-ycor]
       
       ; if there was a clicked node
       if clicked-node != nobody [
+        
+        
         print (word "CLICKED Node " [who] of clicked-node " | OSM: " [node-id] of clicked-node " | Stop?: " [is-transport-stop?] of clicked-node)
         
         if not is-list? draft-jeepney-route-nodes [
           print (word "NOT LIST CONDITION")
           set draft-jeepney-route-nodes []
         ]
+        
+        ; color all next available nodes
         
         ifelse empty? draft-jeepney-route-nodes
         [
@@ -352,6 +368,7 @@ to record-route
          print length draft-jeepney-route-nodes
          let last-added-node last draft-jeepney-route-nodes
          
+         context-use-road-network-only
          let road-segment [nw:turtles-on-weighted-path-to clicked-node "road-length"] of last-added-node
          print (word "Road segment: " road-segment)
 
@@ -359,17 +376,21 @@ to record-route
          [
             let temp-list sentence draft-jeepney-route-nodes but-first road-segment
             set draft-jeepney-route-nodes temp-list
-            
-            ; temporarily color the road segments
-            
          ]
          [
-            print (word "That is an invalid next node. Please select a different route.")
+            user-message (word "That is an invalid next node. Please select a different route.")
          ] ; end of checking for road segment
-        
         ] ; end of checking for empty draft nodes
         
-        
+        if not empty? draft-jeepney-route-nodes [
+          ask last draft-jeepney-route-nodes [
+           ask out-link-neighbors [
+             set color green
+             set size 0.5
+           ]
+         ]
+         display
+        ]
       ]
     ]
     set was-mouse-down? mouse-down?
@@ -389,8 +410,12 @@ to record-route
     set complete-jeepney-routes lput draft-jeepney-route-nodes complete-jeepney-routes
     set draft-jeepney-route-nodes []
     
-    ; context-reset-network
-    
+    context-reset-network
+    ask nodes with [color = green] [
+      set color red
+      set size 0.3
+    ]
+    display
     stop
   ]
 end
@@ -458,6 +483,35 @@ to load-route
   
 end
 
+to highlight-routes
+  ifelse not routes-highlighted? [
+    set routes-highlighted? not routes-highlighted?
+    foreach complete-jeepney-routes [ coloring-route -> 
+      (foreach (but-last coloring-route) (but-first coloring-route) [ [from-node to-node] -> 
+        ask from-node [
+          ask link-with to-node [
+            set thickness 0.3
+            set color red
+          ]
+        ]
+      ])
+    ]
+    
+    ask roads with [color = white] [
+      set thickness 0.008
+    ]
+  ]
+  [
+    set routes-highlighted? not routes-highlighted?
+    ask roads with [color = white] [
+      set thickness 0.1
+    ]
+    ask roads with [color = red] [
+      set color white
+      set thickness 0.1
+    ]
+  ]
+end
 
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
@@ -731,7 +785,7 @@ ask buildings [
     <button x="240" y="300" height="40" disableUntilTicks="false" forever="true" kind="Observer" width="110" display="Record clicks">record-route</button>
     <input x="220" multiline="false" y="350" height="60" variable="global-jeep-capacity" type="string" width="135">[ 20 22 24 ]</input>
     <input x="20" multiline="false" y="350" height="65" variable="jeepney-per-route" type="string" width="195">[ 2 ]</input>
-    <switch x="115" y="300" height="40" on="false" variable="is-editing-route?" width="120" display="is-editing-route?"></switch>
+    <switch x="115" y="300" height="40" on="true" variable="is-editing-route?" width="120" display="is-editing-route?"></switch>
     <button x="20" y="300" height="40" disableUntilTicks="false" forever="false" kind="Observer" width="90">export-route</button>
     <button x="300" y="465" height="40" disableUntilTicks="false" forever="false" kind="Observer" width="55" display="Reset">clear-all</button>
     <button x="240" y="465" height="40" disableUntilTicks="false" forever="true" kind="Observer" width="55" display="go">go</button>
@@ -749,7 +803,6 @@ set is-editing-route? false
 clear-output</button>
     <note x="20" y="255" backgroundDark="0" fontSize="12" width="310" markdown="false" height="41" textColorDark="-1" textColorLight="-16777216" backgroundLight="0">To create a route, toggle switch, click Record Clicks.
 Once satisfied, untoggle switch.</note>
-    <button x="60" y="460" height="40" disableUntilTicks="false" forever="false" kind="Observer" width="85" display="Load Routes">load-route</button>
     <button x="215" y="420" height="40" disableUntilTicks="false" forever="false" kind="Observer" width="135" display="Show/Hide Footpaths">ask roads [
   if member? road-type ["footway" "path" "cycleway" "steps"] [
     set hidden? not hidden?
@@ -761,6 +814,8 @@ ask nodes [
     set hidden? not hidden?
   ]
 ]</button>
+    <button x="120" y="420" height="40" disableUntilTicks="false" forever="false" kind="Observer" width="90" display="Color routes">highlight-routes</button>
+    <button x="60" y="465" height="40" disableUntilTicks="false" forever="false" kind="Observer" width="85" display="Load Routes">load-route</button>
   </widgets>
   <info>## WHAT IS IT?
 
