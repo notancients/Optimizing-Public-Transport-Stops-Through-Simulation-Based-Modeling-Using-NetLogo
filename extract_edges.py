@@ -6,6 +6,8 @@ import warnings
 
 warnings.filterwarnings('ignore')
 
+# road types
+# https://wiki.openstreetmap.org/wiki/Tag:highway%3Dtrack
 
 SPEED_MAP = {
     "primary": 50,
@@ -156,24 +158,6 @@ def categorize_building(row):
     # fallback
     return 'miscellaneous'
     
-# Categorize each building
-# def categorize_building(row):
-#     print(row)
-#     amenity = str(row.get('amenity', '')).lower()
-#     b_type = str(row.get('building', '')).lower()
-
-
-    
-#     if 'school' in amenity or 'college' in amenity or 'university' in amenity:
-#         return 'school'
-#     elif 'hospital' in amenity or 'clinic' in amenity:
-#         return 'special' # Special zones
-#     elif b_type in ['retail', 'commercial', 'supermarket', 'office']:
-#         return 'commercial'
-#     elif b_type in ['residential', 'house', 'apartments', 'dormitory']:
-#         return 'residential'
-#     else:
-#         return 'residential' # Default for unlabelled
 
 def give_building_names(row):
     name = row.get('name')
@@ -181,9 +165,8 @@ def give_building_names(row):
         return str(name)
     else:
         return 'Unnamed'
-    pass
 
-def fetch_nodes(place_name, min_x, max_x, min_y, max_y, world_size):
+def fetch_buildings(place_name, min_x, max_x, min_y, max_y, world_size):
     # Fetch buildings and get their 'tags'
     print("Fetching buildings.")
     # tags = {'building': True, 'amenity': ['school', 'college', 'university', 'hospital', 'clinic'], 'highway':'crossing'}
@@ -195,9 +178,6 @@ def fetch_nodes(place_name, min_x, max_x, min_y, max_y, world_size):
         "landuse": True,
     }
     buildings = ox.features_from_place(place_name, tags=tags)
-
-    # Step 5:
-    # Format and scale buildings
 
     print("Formatting buildings.")
     # Get centroid of each building

@@ -1,6 +1,7 @@
 <?xml version="1.0" encoding="utf-8"?>
 <model version="NetLogo 7.0.0" snapToGrid="true">
-  <code><![CDATA[extensions [ csv nw py]
+  <code><![CDATA[extensions [ csv nw py table]
+
 
 
 globals [
@@ -19,9 +20,8 @@ globals [
   was-mouse-down?
   ; global-jeep-capacity ; exists in the interface area, holds the possible values of jeep capacities
   
-  route-names
   draft-jeepney-route-nodes ; this will hold the list of nodes
-  complete-jeepney-routes; list of lists contains a list of all TURTLE nodes per route
+  complete-jeepney-routes; this will be a table containing route names and the complete set of nodes for each route
   
   routes-highlighted?
   ;;;;;;;;;;;;;;;;;;;;;
@@ -101,6 +101,13 @@ vehicles-own [
 to thetop 
 end
 
+to testtable
+  let dict table:make
+  table:put dict "a" 5
+  table:put dict "b" 6
+  print dict
+end
+
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ; Networking helper functions
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
@@ -155,8 +162,7 @@ to load-map
   set is-editing-route? false
   set was-editing-route? false
   set draft-jeepney-route-nodes []
-  set complete-jeepney-routes []
-  set route-names []
+  set complete-jeepney-routes table:make
   set routes-highlighted? false
   ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
   
@@ -399,13 +405,15 @@ to record-route
   ; save route
   if not is-editing-route? and length draft-jeepney-route-nodes > 1 [
     let route-name user-input "Enter route name: "
+    
+    ; give each node knowledge of what route passes through them via a list variable
     foreach draft-jeepney-route-nodes [ element ->
       ask element [
         set routes lput route-name routes
       ]
     ]
     
-    set route-names lput route-name route-names
+    table:put complete-jeepney-routes route-name draft-jeepney-route-nodes
     
     set complete-jeepney-routes lput draft-jeepney-route-nodes complete-jeepney-routes
     set draft-jeepney-route-nodes []
@@ -418,6 +426,12 @@ to record-route
     display
     stop
   ]
+  
+  ask nodes with [color = green] [
+    set color red
+    set size 0.3
+  ]
+  
 end
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
@@ -430,18 +444,19 @@ to export-route
     stop
   ]
   
-  let file-name user-input "Enter desired filename (do not include .csv): "
+  let file-name user-input "Enter desired filename (do not include .json): "
   ; for each route we have, create new lists containing their node-id from osm so that we can load them
   ; again
-  let formatted-for-csv map [
-    jeep-route -> map [element -> [node-id] of element] jeep-route
-  ] complete-jeepney-routes 
-  csv:to-file (word file-name ".csv") formatted-for-csv
   
-  csv:to-file (word file-name "-" "route-names" ".csv") (list route-names)
+  let formatted-for-json table:make
+  set formatted-for-json map [ jeep-route -> 
+    map [element -> 
+      [node-id] of element
+    ] jeep-route
+  ] complete-jeepney-routes 
 
   
-  user-message (word "Route successfully saved to " file-name ".csv!")
+  user-message (word "Route successfully saved to " file-name ".json!")
   
 end
 
@@ -453,32 +468,6 @@ to load-route
   ; translate the node-ids that we saved into the corresponding turtles
   
   let file-name user-input "Enter file to load (do not include .csv: "
-  
-  set route-names first csv:from-file (word file-name "-" "route-names" ".csv")
-  
-  let loaded-routes csv:from-file (word file-name ".csv")
-  print loaded-routes
-  
-  foreach loaded-routes [ loaded-route ->
-    let translated-route map [ loaded-id -> one-of nodes with [node-id = loaded-id] ] loaded-route
-    
-    set complete-jeepney-routes lput translated-route complete-jeepney-routes
-  ]
-  
-  (foreach route-names loaded-routes [ [loaded-name loaded-route] ->
-    
-    let translated-route []
-    
-    foreach loaded-route [ loaded-id ->
-      let loaded-node one-of nodes with [node-id = loaded-id]
-      ask loaded-node [
-        set routes lput loaded-name routes
-      ]
-      
-      set translated-route lput loaded-node translated-route
-    ]
-    set complete-jeepney-routes lput translated-route complete-jeepney-routes
-  ])
   
   
 end
@@ -519,48 +508,8 @@ end
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 to spawn-jeepneys
   ; Check if the jeepney per route variable is empty
-  if empty? jeepney-per-route [
-    user-message "You haven't inputted the proper amount of jeepney per route yet."
-    stop
-  ]
-  ; convert the string into a list of numbers
-  let num-arr-jeepney-per-route read-from-string jeepney-per-route
+  ;foreach complete-
   
-  ; Check if the routes list are empty
-  if empty? complete-jeepney-routes [
-    user-message "You have not designated any jeepney routes yet."
-    stop
-  ]
-  
-  ; Check if route count is compatible with the jeepney per route count
-  if (length complete-jeepney-routes) != (length num-arr-jeepney-per-route) [
-    user-message "Incompatible length between amount of routes and declared jeepneys per route."
-    stop
-  ]
-  
-  if (length global-jeep-capacity) = 0 [
-    user-message "You have not inputted the capacity possible per jeep"
-    stop
-  ]
-  
-  ; Spawn a corresponding amount of jeepneys per route
-  let i 0
-  while [i < (length complete-jeepney-routes)] [
-    let curr-route item i complete-jeepney-routes
-    let jeep-count item i num-arr-jeepney-per-route
-    create-vehicles jeep-count [
-      
-      move-to one-of curr-route
-      set shape "car"
-      set color green
-      set size 2
-      set speed 2
-      set route curr-route
-      set is-public? true
-      set max-capacity one-of read-from-string global-jeep-capacity
-    ]
-    set i i + 1
-  ]
   
 end
 
@@ -785,7 +734,7 @@ ask buildings [
     <button x="240" y="300" height="40" disableUntilTicks="false" forever="true" kind="Observer" width="110" display="Record clicks">record-route</button>
     <input x="220" multiline="false" y="350" height="60" variable="global-jeep-capacity" type="string" width="135">[ 20 22 24 ]</input>
     <input x="20" multiline="false" y="350" height="65" variable="jeepney-per-route" type="string" width="195">[ 2 ]</input>
-    <switch x="115" y="300" height="40" on="true" variable="is-editing-route?" width="120" display="is-editing-route?"></switch>
+    <switch x="115" y="300" height="40" on="false" variable="is-editing-route?" width="120" display="is-editing-route?"></switch>
     <button x="20" y="300" height="40" disableUntilTicks="false" forever="false" kind="Observer" width="90">export-route</button>
     <button x="300" y="465" height="40" disableUntilTicks="false" forever="false" kind="Observer" width="55" display="Reset">clear-all</button>
     <button x="240" y="465" height="40" disableUntilTicks="false" forever="true" kind="Observer" width="55" display="go">go</button>
@@ -793,16 +742,12 @@ ask buildings [
 reset-ticks</button>
     <monitor x="90" precision="0" y="640" height="60" fontSize="11" width="100" display="Pedestrian count">count pedestrians</monitor>
     <button x="155" y="465" height="40" disableUntilTicks="false" forever="false" kind="Observer" width="76" display="Load Map">load-map</button>
-    <button x="145" y="510" height="40" disableUntilTicks="false" forever="false" kind="Observer" width="115" display="Route Debugging">print (word "Draft: " draft-jeepney-route-nodes)
-print (word "Complete: " complete-jeepney-routes)
-print (word "Route names: " route-names)</button>
+    <button x="145" y="510" height="40" disableUntilTicks="false" forever="false" kind="Observer" width="115" display="Route Debugging"></button>
     <button x="45" y="510" height="40" disableUntilTicks="false" forever="false" kind="Observer" width="90" display="Reset routes">set draft-jeepney-route-nodes []
 set complete-jeepney-routes []
 ask nodes [set color red]
 set is-editing-route? false
 clear-output</button>
-    <note x="20" y="255" backgroundDark="0" fontSize="12" width="310" markdown="false" height="41" textColorDark="-1" textColorLight="-16777216" backgroundLight="0">To create a route, toggle switch, click Record Clicks.
-Once satisfied, untoggle switch.</note>
     <button x="215" y="420" height="40" disableUntilTicks="false" forever="false" kind="Observer" width="135" display="Show/Hide Footpaths">ask roads [
   if member? road-type ["footway" "path" "cycleway" "steps"] [
     set hidden? not hidden?
@@ -816,6 +761,11 @@ ask nodes [
 ]</button>
     <button x="120" y="420" height="40" disableUntilTicks="false" forever="false" kind="Observer" width="90" display="Color routes">highlight-routes</button>
     <button x="60" y="465" height="40" disableUntilTicks="false" forever="false" kind="Observer" width="85" display="Load Routes">load-route</button>
+    <note x="20" y="255" backgroundDark="0" fontSize="12" width="340" markdown="false" height="42" textColorDark="-1" textColorLight="-16777216" backgroundLight="0">To create a route, toggle switch, click Record Clicks.
+If done, untoggle switch. To cancel, click RC before toggle.</note>
+    <button x="142" y="112" height="40" disableUntilTicks="false" forever="false" kind="Observer" width="70" display="testtable">let test table:from-json-file "test.json"
+print test
+print table:get test "c"</button>
   </widgets>
   <info>## WHAT IS IT?
 
