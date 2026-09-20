@@ -1,9 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
 <model version="NetLogo 7.0.0" snapToGrid="true">
-  <code><![CDATA[__includes [ "debugging.nls" ]
-
-
-extensions [ csv nw py table]
+  <code><![CDATA[extensions [ csv nw py table]
 
 
 
@@ -417,7 +414,8 @@ to record-route
     ]
     
     table:put complete-jeepney-routes route-name draft-jeepney-route-nodes
-
+    
+    set complete-jeepney-routes lput draft-jeepney-route-nodes complete-jeepney-routes
     set draft-jeepney-route-nodes []
     
     context-reset-network
@@ -744,10 +742,9 @@ ask buildings [
 reset-ticks</button>
     <monitor x="90" precision="0" y="640" height="60" fontSize="11" width="100" display="Pedestrian count">count pedestrians</monitor>
     <button x="155" y="465" height="40" disableUntilTicks="false" forever="false" kind="Observer" width="76" display="Load Map">load-map</button>
-    <button x="145" y="510" height="40" disableUntilTicks="false" forever="false" kind="Observer" width="116" display="Route Debugging">print complete-jeepney-routes
-print (word "draft nodes" draft-jeepney-route-nodes)</button>
+    <button x="145" y="510" height="40" disableUntilTicks="false" forever="false" kind="Observer" width="115" display="Route Debugging"></button>
     <button x="45" y="510" height="40" disableUntilTicks="false" forever="false" kind="Observer" width="90" display="Reset routes">set draft-jeepney-route-nodes []
-set complete-jeepney-routes table:make
+set complete-jeepney-routes []
 ask nodes [set color red]
 set is-editing-route? false
 clear-output</button>

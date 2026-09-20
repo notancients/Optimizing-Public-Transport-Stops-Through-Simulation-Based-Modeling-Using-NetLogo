@@ -1,0 +1,15 @@
+to route-debugging
+  print "Complete jeepney routes:"
+  
+  if table:length complete-jeepney-routes = 0 [
+    print "There are no routes yet."
+    stop
+  ]
+  
+  foreach table:keys complete-jeepney-routes [ route-name ->
+    let route-nodes table:get complete-jeepney-routes route-name
+    
+    print (word route-name route-nodes)
+  ]
+  
+end
