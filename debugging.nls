@@ -13,3 +13,48 @@ to route-debugging
   ]
   
 end
+
+
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+; Export Routes
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
+to export-route
+  if table:length complete-jeepney-routes = 0 [
+    user-message "You haven't saved any routes yet."
+    stop
+  ]
+  
+  let file-name user-input "Enter desired filename (do not include .json): "
+  ; for each route we have, create new lists containing their node-id from osm so that we can load them
+  ; again
+  
+  let formatted-for-json table:make
+  
+  ; need to format for json since to-json expects strings and not turtle, so we're going to save osm ids
+  foreach table:keys complete-jeepney-routes [ route-name ->
+    let route-nodes table:get complete-jeepney-routes route-name
+
+    
+    let osm-ids map [ element -> 
+      (word [node-id] of element) ; we need to convert them into strings since they get saved as scientific notation
+    ] route-nodes
+    
+    table:put formatted-for-json route-name osm-ids
+  ]
+  
+  let json-string table:to-json formatted-for-json
+  
+  let complete-file-name (word file-name ".json")
+  if file-exists? complete-file-name [
+    file-delete complete-file-name
+  ]
+  
+  file-open complete-file-name
+  file-print json-string
+  file-close
+
+  
+  user-message (word "Route successfully saved to " file-name ".json!")
+  
+end

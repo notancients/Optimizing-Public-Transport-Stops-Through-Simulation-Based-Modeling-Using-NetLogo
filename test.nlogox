@@ -436,31 +436,7 @@ to record-route
   
 end
 
-;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-; Export Routes
-;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
-to export-route
-  if empty? complete-jeepney-routes [
-    user-message "You haven't saved any routes yet."
-    stop
-  ]
-  
-  let file-name user-input "Enter desired filename (do not include .json): "
-  ; for each route we have, create new lists containing their node-id from osm so that we can load them
-  ; again
-  
-  let formatted-for-json table:make
-  set formatted-for-json map [ jeep-route -> 
-    map [element -> 
-      [node-id] of element
-    ] jeep-route
-  ] complete-jeepney-routes 
-
-  
-  user-message (word "Route successfully saved to " file-name ".json!")
-  
-end
 
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
@@ -469,15 +445,38 @@ end
 to load-route
   ; translate the node-ids that we saved into the corresponding turtles
   
-  let file-name user-input "Enter file to load (do not include .csv: "
+  let file-name user-input "Enter file to load (do not include .json):"
+  let loaded-routes table:make
+  ifelse file-exists? (word file-name ".json") [
+    set loaded-routes table:from-json-file (word file-name ".json")
+    print loaded-routes
+    ; since this will load osm node-ids, we have to translate them into the corresponding node id
+    foreach table:keys loaded-routes [ route-name ->
+      let osm-id-list table:get loaded-routes route-name
+      let converted-list map [ curr-id ->
+        one-of nodes with [ (word node-id) = curr-id ]
+      ] osm-id-list
+      
+      table:put complete-jeepney-routes route-name converted-list
+    ]
+  ]
+  [
+    user-message "That file doesn't exist."
+  ]
   
+
   
 end
+
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+; Highlight Routes
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
 to highlight-routes
   ifelse not routes-highlighted? [
     set routes-highlighted? not routes-highlighted?
-    foreach complete-jeepney-routes [ coloring-route -> 
+    foreach table:keys complete-jeepney-routes [ route-name -> 
+      let coloring-route table:get complete-jeepney-routes route-name
       (foreach (but-last coloring-route) (but-first coloring-route) [ [from-node to-node] -> 
         ask from-node [
           ask link-with to-node [
@@ -744,8 +743,7 @@ ask buildings [
 reset-ticks</button>
     <monitor x="90" precision="0" y="640" height="60" fontSize="11" width="100" display="Pedestrian count">count pedestrians</monitor>
     <button x="155" y="465" height="40" disableUntilTicks="false" forever="false" kind="Observer" width="76" display="Load Map">load-map</button>
-    <button x="145" y="510" height="40" disableUntilTicks="false" forever="false" kind="Observer" width="116" display="Route Debugging">print complete-jeepney-routes
-print (word "draft nodes" draft-jeepney-route-nodes)</button>
+    <button x="145" y="510" height="40" disableUntilTicks="false" forever="false" kind="Observer" width="116" display="Route Debugging">route-debugging</button>
     <button x="45" y="510" height="40" disableUntilTicks="false" forever="false" kind="Observer" width="90" display="Reset routes">set draft-jeepney-route-nodes []
 set complete-jeepney-routes table:make
 ask nodes [set color red]
